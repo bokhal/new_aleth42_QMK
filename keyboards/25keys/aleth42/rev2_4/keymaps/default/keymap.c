@@ -2,9 +2,8 @@
 #include "../../common/40_keymap.h"
 #include "os_detection.h"
 #include "keymap.h"
-#include "vim.h"
 
-// === === === OS / modifier helpers === === ===
+// === === === OS helpers === === ===
 static os_variant_t get_os(void) {
     return detected_host_os();
 }
@@ -13,17 +12,7 @@ static bool is_os_windows(void) {
     return get_os() == OS_WINDOWS;
 }
 
-bool is_shifted(void) {
-    return (get_mods() | get_oneshot_mods()) & MOD_MASK_SHIFT;
-}
-
-bool is_ctrled(void) {
-    return (get_mods() | get_oneshot_mods()) & MOD_MASK_CTRL;
-}
-
 // === === === Declaration === === ===
-keyboard_mode_t kb_mode = MODE_BASE;
-
 typedef struct {
     bool pressed;
     bool hold;
@@ -41,6 +30,21 @@ static hold_key_t tab = {
     .tap_key = KC_TAB,
     .hold_delay = 200
 };
+
+// --- 방향키 레이어 반복 입력 ---
+#define ARROW_REPEAT_DELAY    300  // 처음 반복이 시작되기까지 (ms)
+#define ARROW_REPEAT_INTERVAL 30   // 반복 간격 (ms)
+
+static uint16_t repeat_key = KC_NO;     // 눌려 있는 물리 키 (KC_NO면 반복 없음)
+static uint16_t repeat_code = KC_NO;    // 반복해서 보낼 키코드
+static uint16_t repeat_timer = 0;
+static bool     repeat_started = false; // 첫 딜레이 이후 true
+
+static void stop_repeat(void) {
+    repeat_key = KC_NO;
+    repeat_code = KC_NO;
+    repeat_started = false;
+}
 
 // === === === enums === === ===
 enum layer_names {
@@ -102,13 +106,13 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_ESC,         KC_Q,  KC_W,  KC_E,  KC_R,  KC_T,  KC_Y,  KC_U,  KC_I,  KC_O,  KC_P,   KC_MUTE,
         TAB_ARROW,     KC_A,  KC_S,  KC_D,  KC_F,  KC_G,  KC_H,  KC_J,  KC_K,  KC_L,       KC_ENT,
         KC_LSFT,             KC_Z,  KC_X,  KC_C,  KC_V,  KC_B,  KC_N,  KC_M,  KC_COMM, KC_DOT, KC_SLSH,
-        KC_LCTL,     KC_LGUI, KC_LALT,          MO(_FN),           KC_SPC,        MO(_SYS),  KC_RSFT, KC_MPLY
+        KC_LCTL,     KC_LGUI, KC_LALT,          LT(_FN, KC_BSPC),           KC_SPC,        MO(_SYS),  KC_RSFT, KC_MPLY
     ),
 
     [_FN] = LAYOUT_wrapper(
         MACRO, KC_1, KC_2, KC_3, KC_4, KC_5, KC_6, KC_7, KC_8, KC_9, KC_0, KC_NO,
         KC_NO, KC_NO, KC_NO, KC_DEL, KC_HOME, KC_PGUP, KC_QUOT, KC_LBRC, KC_RBRC, KC_SCLN, KC_ENT,
-        KC_LSFT, KC_NO, KC_NO, KC_END, KC_PGDN, KC_NO, KC_EQL, KC_MINS, KC_NO, KC_UP, KC_BSLS,
+        KC_LSFT, KC_NO, KC_NO, KC_END, KC_PGDN, KC_NO, KC_MINS, KC_EQL, KC_NO, KC_UP, KC_BSLS,
         KC_NO, KC_NO, KC_NO, KC_TRNS, KC_BSPC, KC_LEFT, KC_DOWN, KC_RGHT
     ),
 
@@ -161,6 +165,7 @@ static void process_hold_key(hold_key_t *key, keyrecord_t *record) {
         key->pressed = false;
         key->hold = false;
         key->timer = 0;
+        stop_repeat();
     }
 }
 
@@ -170,21 +175,11 @@ static bool macro_layer(uint16_t k, keyrecord_t *r) {
 
     switch (k) {
         case KC_1:
-            SEND_STRING("gmail 1");
+            SEND_STRING("andy52599731@gmail.com");
             return false;
 
         case KC_2:
-            SEND_STRING("gamil 2");
-            return false;
-
-        case KC_L:
-            if (kb_mode == MODE_BASE) {
-                kb_mode = MODE_VIM_NORMAL;
-            } else {
-                reset_state_vim();
-                reset_vim_command_buffer();
-                kb_mode = MODE_BASE;
-            }
+            SEND_STRING("bokhal451@gmail.com");
             return false;
 
         default:
@@ -193,40 +188,61 @@ static bool macro_layer(uint16_t k, keyrecord_t *r) {
 }
 
 static bool arrow_layer(uint16_t k, keyrecord_t *r) {
-    if (!r->event.pressed) return true;
+    if (!r->event.pressed) {
+        if (k == repeat_key) {
+            stop_repeat();
+            return false;
+        }
+        return true;
+    }
+
+    uint16_t code;
+    bool repeatable = true;
 
     switch (k) {
         case KC_Q:
-            tap_code16(LCTL(S(KC_TAB)));
-            return false;
+            code = LCTL(KC_TAB);
+            repeatable = false;  // 탭 전환은 반복하지 않음
+            break;
 
         case KC_W:
-            tap_code(KC_UP);
-            return false;
+            code = KC_UP;
+            break;
 
         case KC_E:
-            tap_code16(LCTL(KC_TAB));
-            return false;
+            code = LCTL(S(KC_TAB));
+            repeatable = false;
+            break;
 
         case KC_A:
-            tap_code(KC_LEFT);
-            return false;
+            code = KC_LEFT;
+            break;
 
         case KC_S:
-            tap_code(KC_DOWN);
-            return false;
+            code = KC_DOWN;
+            break;
 
         case KC_D:
-            tap_code(KC_RGHT);
-            return false;
+            code = KC_RGHT;
+            break;
 
         default:
             return true;
     }
+
+    tap_code16(code);
+
+    if (repeatable) {
+        repeat_key = k;
+        repeat_code = code;
+        repeat_timer = timer_read();
+        repeat_started = false;
+    }
+    return false;
 }
 
 // === === === typing / mode dispatch === === ===
-bool typing_process(uint16_t keycode, keyrecord_t *record) {
+static bool typing_process(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
         case MACRO:
             macro_pressed = record->event.pressed;
@@ -262,25 +278,7 @@ bool typing_process(uint16_t keycode, keyrecord_t *record) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    switch (kb_mode) {
-        case MODE_BASE:
-            return typing_process(keycode, record);
-
-        case MODE_VIM_NORMAL:
-            return mode_vim_normal_process(keycode, record);
-
-        case MODE_VIM_INSERT:
-            return mode_vim_insert_process(keycode, record);
-
-        case MODE_VIM_VISUAL:
-            return mode_vim_visual_process(keycode, record);
-
-        case MODE_VIM_COMMAND:
-            return mode_vim_command_process(keycode, record);
-
-        default:
-            return true;
-    }
+    return typing_process(keycode, record);
 }
 
 // === === === matrix scan === === ===
@@ -288,6 +286,15 @@ void matrix_scan_user(void) {
     if (tab.pressed && !tab.hold) {
         if (timer_elapsed(tab.timer) > tab.hold_delay) {
             tab.hold = true;
+        }
+    }
+
+    if (repeat_key != KC_NO) {
+        uint16_t wait = repeat_started ? ARROW_REPEAT_INTERVAL : ARROW_REPEAT_DELAY;
+        if (timer_elapsed(repeat_timer) >= wait) {
+            tap_code16(repeat_code);
+            repeat_timer = timer_read();
+            repeat_started = true;
         }
     }
 }

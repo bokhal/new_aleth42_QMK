@@ -14,21 +14,28 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// #include "quantum.h"
+// #include "os_detection.h"
+
+// bool set_os_key_mapping(os_variant_t os_type) {
+//     switch (os_type) {
+//         case OS_MACOS:
+//         case OS_IOS:
+//             keymap_config.swap_lalt_lgui = false;
+//             break;
+//         case OS_WINDOWS:
+//         case OS_LINUX:
+//             keymap_config.swap_lalt_lgui = true;
+//             break;
+//         default:
+//             break;
+//     }
+//     return true;
+// }
 #include "quantum.h"
 #include "os_detection.h"
 
 bool set_os_key_mapping(os_variant_t os_type) {
-    switch (os_type) {
-        case OS_MACOS:
-        case OS_IOS:
-            keymap_config.swap_lalt_lgui = false;
-            break;
-        case OS_WINDOWS:
-        case OS_LINUX:
-            keymap_config.swap_lalt_lgui = true;
-            break;
-        default:
-            break;
-    }
+    keymap_config.swap_lalt_lgui = false;
     return true;
 }
