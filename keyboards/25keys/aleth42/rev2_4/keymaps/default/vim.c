@@ -14,6 +14,15 @@ void reset_state_vim(void) {
     kb_vim.executed = false;
 }
 
+bool is_shifted(void) {
+    return (get_mods() | get_oneshot_mods()) & MOD_MASK_SHIFT;
+}
+
+bool is_ctrled(void) {
+    return (get_mods() | get_oneshot_mods()) & MOD_MASK_CTRL;
+}
+
+
 static uint16_t vim_count(void) {
     return kb_vim.count_vim ? kb_vim.count_vim : 1;
 }

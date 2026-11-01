@@ -2,6 +2,7 @@
 #include "../../common/40_keymap.h"
 #include "os_detection.h"
 #include "keymap.h"
+#include "vim.h"
 
 // === === === OS helpers === === ===
 static os_variant_t get_os(void) {
@@ -11,6 +12,8 @@ static os_variant_t get_os(void) {
 static bool is_os_windows(void) {
     return get_os() == OS_WINDOWS;
 }
+
+keyboard_mode_t kb_mode = MODE_BASE;
 
 // === === === Declaration === === ===
 typedef struct {
@@ -56,18 +59,21 @@ enum layer_names {
 enum combos {
     CW_CAPSWORD,
     NM_EMAIL,
-    PS_SCREENSHOT
+    PS_SCREENSHOT,
+    VIM_VIMMODE
 };
 
 // === === === Combos === === ===
 const uint16_t PROGMEM capsWord_combo[] = {KC_C, KC_W, COMBO_END};
 const uint16_t PROGMEM email_combo[] = {KC_N, KC_M, COMBO_END};
 const uint16_t PROGMEM screenShot_combo[] = {KC_P, KC_S, COMBO_END};
+const uint16_t PROGMEM vimMode_combo[] = {KC_V, KC_I, KC_M, COMBO_END};
 
 combo_t key_combos[] = {
     [CW_CAPSWORD] = COMBO(capsWord_combo, QK_CAPS_WORD_TOGGLE),
     [NM_EMAIL] = COMBO_ACTION(email_combo),
-    [PS_SCREENSHOT] = COMBO_ACTION(screenShot_combo)
+    [PS_SCREENSHOT] = COMBO_ACTION(screenShot_combo),
+    [VIM_VIMMODE] = COMBO_ACTION(vimMode_combo)
 };
 
 static void send_screenshot_shortcut(void) {
@@ -96,6 +102,10 @@ void process_combo_event(uint16_t combo_index, bool pressed) {
 
         case PS_SCREENSHOT:
             send_screenshot_shortcut();
+            break;
+
+        case VIM_VIMMODE:
+            kb_mode = MODE_VIM_NORMAL;
             break;
     }
 }
@@ -278,7 +288,25 @@ static bool typing_process(uint16_t keycode, keyrecord_t *record) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    return typing_process(keycode, record);
+    switch (kb_mode) {
+        case MODE_BASE:
+            return typing_process(keycode, record);
+
+        case MODE_VIM_NORMAL:
+            return mode_vim_normal_process(keycode, record);
+
+        case MODE_VIM_INSERT:
+            return mode_vim_insert_process(keycode, record);
+
+        case MODE_VIM_VISUAL:
+            return mode_vim_visual_process(keycode, record);
+
+        case MODE_VIM_COMMAND:
+            return mode_vim_command_process(keycode, record);
+
+        default:
+            return true;
+    }
 }
 
 // === === === matrix scan === === ===
